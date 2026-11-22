@@ -1,0 +1,962 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Shifting Arena — Knock-off</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #bfe6f5; touch-action: none;
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif; -webkit-user-select: none; user-select: none;
+    -webkit-touch-callout: none; color: #1E2A38; }
+  canvas { display: block; touch-action: none; }
+  #hud { position: fixed; top: 8px; left: 8px; font-size: 12px; line-height: 1.45; display: none;
+    background: rgba(255,255,255,0.78); padding: 6px 10px; border-radius: 8px; max-width: 58vw; cursor: pointer; }
+  #hud b { font-weight: 600; }
+  #helpBtn, #leaveBtn { position: fixed; top: 8px; height: 30px; border-radius: 15px; display: none;
+    align-items: center; justify-content: center; background: rgba(255,255,255,0.78);
+    font-weight: 600; font-size: 14px; cursor: pointer; }
+  #helpBtn { left: 8px; width: 30px; }
+  #leaveBtn { right: 8px; padding: 0 12px; font-size: 12px; }
+  #score { position: fixed; top: 44px; right: 8px; display: none; flex-direction: column; gap: 4px;
+    font-size: 13px; font-weight: 600; pointer-events: none; }
+  #score div { background: rgba(255,255,255,0.78); padding: 3px 8px; border-radius: 8px; text-align: right; }
+  #banner { position: fixed; top: 30%; left: 50%; transform: translateX(-50%); font-size: 26px; font-weight: 700;
+    background: rgba(255,255,255,0.85); padding: 10px 18px; border-radius: 12px; display: none; text-align: center;
+    pointer-events: none; }
+  #glideWrap { position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%); width: 140px; height: 8px;
+    background: rgba(30,42,56,0.25); border-radius: 4px; overflow: hidden; pointer-events: none; display: none; }
+  #glideBar { height: 100%; width: 100%; background: #2BB3A8; }
+  #stickBase { position: fixed; width: 130px; height: 130px; margin: -65px 0 0 -65px; border-radius: 50%;
+    border: 3px solid rgba(30,42,56,0.55); background: rgba(255,255,255,0.25); display: none; pointer-events: none; }
+  #stickKnob { position: fixed; width: 50px; height: 50px; margin: -25px 0 0 -25px; border-radius: 50%;
+    background: rgba(30,42,56,0.55); display: none; pointer-events: none; }
+  .tbtn { position: fixed; right: 26px; width: 88px; height: 88px; border-radius: 50%;
+    border: 3px solid #1E2A38; background: rgba(255,255,255,0.6); font-size: 15px; font-weight: 600;
+    display: none; align-items: center; justify-content: center; touch-action: none; }
+  #fireBtn { bottom: 140px; }
+  #jumpBtn { bottom: 34px; }
+  .tbtn.down { background: rgba(43,179,168,0.75); }
+  #fireBtn.down { background: rgba(255,138,61,0.75); }
+  #menu { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+    background: rgba(191,230,245,0.82); }
+  #panel { background: #fff; border-radius: 16px; padding: 18px 20px; width: min(320px, 86vw);
+    box-shadow: 0 4px 18px rgba(30,42,56,0.15); }
+  #panel h1 { font-size: 22px; margin: 0 0 2px; }
+  #panel .sub { font-size: 13px; color: #5a6675; margin: 0 0 14px; }
+  .row { display: flex; align-items: center; justify-content: space-between; margin: 10px 0; font-size: 15px; }
+  .stepper { display: flex; align-items: center; gap: 10px; }
+  .stepper button { width: 34px; height: 34px; border-radius: 50%; border: 2px solid #1E2A38; background: #fff;
+    font-size: 18px; font-weight: 600; color: #1E2A38; }
+  .stepper span { min-width: 18px; text-align: center; font-weight: 600; }
+  .big { width: 100%; height: 44px; border-radius: 10px; border: none; font-size: 16px; font-weight: 600;
+    margin-top: 8px; color: #fff; background: #2BB3A8; }
+  .big.alt { background: #FF8A3D; }
+  .big.ghost { background: #fff; color: #1E2A38; border: 2px solid #1E2A38; }
+  #joinRow { display: flex; gap: 8px; margin-top: 8px; }
+  #joinRow input { flex: 1; height: 40px; border-radius: 10px; border: 2px solid #1E2A38; font-size: 18px;
+    text-transform: uppercase; text-align: center; letter-spacing: 3px; min-width: 0; }
+  #joinRow button { margin: 0; width: 90px; }
+  #status { font-size: 13px; margin-top: 12px; min-height: 18px; color: #5a6675; }
+  #status b { color: #1E2A38; font-size: 22px; letter-spacing: 3px; }
+  #err { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; text-align: center;
+    padding: 24px; font-size: 15px; }
+</style>
+<!-- PeerJS for online play (classic script; if it can't load, online buttons explain why) -->
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+</head>
+<body>
+<div id="hud"></div>
+<div id="helpBtn">?</div>
+<div id="leaveBtn">Leave</div>
+<div id="score"></div>
+<div id="banner"></div>
+<div id="glideWrap"><div id="glideBar"></div></div>
+<div id="stickBase"></div>
+<div id="stickKnob"></div>
+<div id="fireBtn" class="tbtn">FIRE</div>
+<div id="jumpBtn" class="tbtn">JUMP</div>
+<div id="menu">
+  <div id="panel">
+    <h1>Shifting Arena</h1>
+    <p class="sub">Knock-off: push everyone into the holes. Last one standing wins.</p>
+    <div class="row">Falls allowed <div class="stepper"><button data-k="lives" data-d="-1">−</button><span id="livesVal">3</span><button data-k="lives" data-d="1">+</button></div></div>
+    <div class="row">Bots <div class="stepper"><button data-k="bots" data-d="-1">−</button><span id="botsVal">3</span><button data-k="bots" data-d="1">+</button></div></div>
+    <button class="big" id="soloBtn">Play vs bots</button>
+    <button class="big alt" id="hostBtn">Host online game</button>
+    <div id="joinRow"><input id="codeIn" maxlength="4" placeholder="CODE" autocomplete="off"><button class="big ghost" id="joinBtn">Join</button></div>
+    <button class="big" id="startBtn" style="display:none">Start match</button>
+    <div id="status"></div>
+  </div>
+</div>
+<div id="err">Couldn't start 3D. This page needs WebGL and access to unpkg.com.</div>
+
+<script type="module">
+import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
+
+// ================= Tuning =================
+const STEP = 1 / 60;
+const PLAYER_R = 0.4, PLAYER_H = 1.6;
+const RUN_SPEED = 6.5, GRAVITY = 26, JUMP_VEL = 9.2;
+const GLIDE_MAX = 1.3, GLIDE_FALL = 1.6;
+const COYOTE = 0.15, JUMP_BUFFER = 0.15;
+const MANTLE_MAX = 1.35;
+const TURN_RATE = 2.6;
+const ARENA = 40, TILE = 4, TILES = ARENA / TILE;
+const FALL_Y = -12, RESPAWN_DELAY = 1.5, ROUND_END_DELAY = 5;
+const FIRE_COOLDOWN = 0.22, SHOT_SPEED = 22, SHOT_LIFE = 1.6, SHOT_R = 0.16;
+const KNOCK = 9, KNOCK_UP = 3.5, STUN = 0.45;
+const PITCH = 0.84;
+const SNAP_RATE = 1 / 20, INPUT_RATE = 1 / 30;
+const ROOM_PREFIX = 'shiftarena-';
+
+const INK = 0x1E2A38, ACCENT = 0xFFC93C;
+const COLORS = [0x2BB3A8, 0xFF8A3D, 0xFF5C8A, 0x8C6BFF];
+const COLOR_NAMES = ['Teal', 'Orange', 'Pink', 'Purple'];
+const COLOR_CSS = ['#2BB3A8', '#FF8A3D', '#FF5C8A', '#8C6BFF'];
+const SPAWNS = [[0, -18], [0, 18], [-18, 0], [18, 0]];
+
+// ================= Renderer / scene =================
+let renderer;
+try { renderer = new THREE.WebGLRenderer({ antialias: true }); }
+catch (e) { document.getElementById('err').style.display = 'flex'; throw e; }
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.prepend(renderer.domElement);
+const canvas = renderer.domElement;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xbfe6f5);
+const camera = new THREE.PerspectiveCamera(75, innerWidth / innerHeight, 0.1, 200);
+scene.add(new THREE.HemisphereLight(0xffffff, 0xb8a98f, 1.1));
+const sun = new THREE.DirectionalLight(0xffffff, 1.6);
+sun.position.set(12, 30, 8);
+sun.castShadow = true;
+sun.shadow.mapSize.set(1024, 1024);
+Object.assign(sun.shadow.camera, { left: -26, right: 26, top: 26, bottom: -26, near: 1, far: 80 });
+sun.shadow.bias = -0.0008;
+scene.add(sun);
+
+const gradTex = new THREE.DataTexture(new Uint8Array([90, 90, 90, 255, 180, 180, 180, 255, 255, 255, 255, 255]), 3, 1);
+gradTex.minFilter = gradTex.magFilter = THREE.NearestFilter;
+gradTex.needsUpdate = true;
+const toon = (color) => new THREE.MeshToonMaterial({ color, gradientMap: gradTex });
+
+// ================= Solids (axis-aligned columns) =================
+const solids = [];
+function makeColumn({ x, z, w, d, h, y0 = 0, color, material }) {
+  const geo = new THREE.BoxGeometry(w, 1, d);
+  geo.translate(0, 0.5, 0);
+  const mesh = new THREE.Mesh(geo, material || toon(color));
+  mesh.position.set(x, y0, z);
+  mesh.castShadow = mesh.receiveShadow = true;
+  scene.add(mesh);
+  const s = { x, z, w, d, y0, h, mesh, dy: 0, min: new THREE.Vector3(), max: new THREE.Vector3() };
+  setHeight(s, h);
+  solids.push(s);
+  return s;
+}
+function setHeight(s, h) {
+  const oldTop = s.max.y;
+  s.h = Math.max(h, 0.001);
+  s.mesh.scale.y = s.h;
+  s.min.set(s.x - s.w / 2, s.y0, s.z - s.d / 2);
+  s.max.set(s.x + s.w / 2, s.y0 + s.h, s.z + s.d / 2);
+  s.dy = s.max.y - oldTop;
+}
+
+// ================= Arena: tiled floor with holes, no walls =================
+// Holes have 4-way rotational symmetry so every spawn side is equal.
+const HOLES = new Set(['2,2', '7,2', '7,7', '2,7', '0,3', '6,0', '9,6', '3,9', '3,3', '6,3', '6,6', '3,6']);
+const tileMatA = toon(0xEFE9DC), tileMatB = toon(0xE4DCCB);
+for (let i = 0; i < TILES; i++) {
+  for (let j = 0; j < TILES; j++) {
+    if (HOLES.has(i + ',' + j)) continue;
+    makeColumn({ x: -ARENA / 2 + TILE * (i + 0.5), z: -ARENA / 2 + TILE * (j + 0.5), w: TILE, d: TILE, h: 1, y0: -1,
+      material: (i + j) % 2 ? tileMatA : tileMatB });
+  }
+}
+const STATIC = 0xD9D2C3;
+for (const s of [-1, 1]) {
+  makeColumn({ x: -6, z: 10 * s, w: 2, d: 2, h: 1.2, color: STATIC });
+  makeColumn({ x: 6, z: 10 * s, w: 2, d: 2, h: 1.2, color: STATIC });
+  makeColumn({ x: -12, z: 5 * s, w: 1, d: 3.5, h: 2.4, color: STATIC });
+  makeColumn({ x: 12, z: 5 * s, w: 1, d: 3.5, h: 2.4, color: STATIC });
+}
+for (let k = 0; k < 4; k++) {   // spawn pads
+  const m = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 1.6, 0.04, 32), toon(COLORS[k]));
+  m.position.set(SPAWNS[k][0], 0.03, SPAWNS[k][1]);
+  scene.add(m);
+}
+
+// ================= Dynamic elements: height = f(match clock) =================
+const smooth = (u) => u * u * (3 - 2 * u);
+const lerp = (a, b, u) => a + (b - a) * u;
+function cycle(t, c) {
+  const T = c.idle + c.move + c.hold + c.move;
+  let u = (((t + c.offset) % T) + T) % T;
+  if (u < c.idle) return { h: c.low, warn: u > c.idle - c.warn, frac: 1 - u / c.idle };
+  u -= c.idle;
+  if (u < c.move) return { h: lerp(c.low, c.high, smooth(u / c.move)), warn: false, frac: 0 };
+  u -= c.move;
+  if (u < c.hold) return { h: c.high, warn: u > c.hold - c.warn, frac: 1 - u / c.hold };
+  u -= c.hold;
+  return { h: lerp(c.high, c.low, smooth(u / c.move)), warn: false, frac: 0 };
+}
+const dynamics = [];
+function addDynamic(opts, cyc) {
+  const mat = toon(ACCENT);
+  mat.emissive = new THREE.Color(0xffffff);
+  mat.emissiveIntensity = 0;
+  const s = makeColumn({ ...opts, h: cyc.low, material: mat });
+  const bar = new THREE.Group();
+  const back = new THREE.Mesh(new THREE.PlaneGeometry(1.3, 0.18), new THREE.MeshBasicMaterial({ color: INK }));
+  const fgGeo = new THREE.PlaneGeometry(1.2, 0.1);
+  fgGeo.translate(0.6, 0, 0);
+  const fgMat = new THREE.MeshBasicMaterial({ color: ACCENT });
+  const fg = new THREE.Mesh(fgGeo, fgMat);
+  fg.position.set(-0.6, 0, 0.01);
+  bar.add(back, fg);
+  scene.add(bar);
+  dynamics.push({ s, cyc, mat, bar, fg, fgMat, visTop: 0 });
+}
+const LIFT = { low: 0.6, high: 4.0, idle: 4, move: 1.5, hold: 4, warn: 1.5 };
+const LIFT_T = LIFT.idle + LIFT.hold + LIFT.move * 2;
+addDynamic({ x: -9, z: 0, w: 4, d: 4 }, { ...LIFT, offset: 0 });
+addDynamic({ x: 9, z: 0, w: 4, d: 4 }, { ...LIFT, offset: LIFT_T / 2 });
+const COVER = { low: 0.02, high: 2.2, idle: 3, move: 0.6, hold: 5, warn: 1 };
+addDynamic({ x: 0, z: -6, w: 3, d: 0.8 }, { ...COVER, offset: 0 });
+addDynamic({ x: 0, z: 6, w: 3, d: 0.8 }, { ...COVER, offset: 0 });
+addDynamic({ x: 0, z: 0, w: 4, d: 0.8 }, { ...COVER, offset: 4.3 });
+function updateDynamics(t) { for (const d of dynamics) setHeight(d.s, cycle(t, d.cyc).h); }
+function drawDynamics(t) {
+  for (const d of dynamics) {
+    const r = cycle(t, d.cyc);
+    d.s.mesh.scale.y = Math.max(r.h, 0.001);
+    d.visTop = d.s.y0 + r.h;
+    d.mat.emissiveIntensity = r.warn ? 0.35 + 0.35 * Math.sin(t * 18) : 0;
+    d.bar.position.set(d.s.x, d.visTop + 0.9, d.s.z);
+    d.bar.quaternion.copy(camera.quaternion);
+    d.bar.visible = r.frac > 0;
+    d.fg.scale.x = Math.max(r.frac, 0.001);
+    d.fgMat.color.setHex(r.warn ? 0xffffff : ACCENT);
+  }
+}
+
+// ================= Character mesh (capsule bot) =================
+function makeBotMesh(color) {
+  const g = new THREE.Group();
+  const bodyMat = toon(color), inkMat = toon(INK);
+  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.4, 0.8, 6, 16), bodyMat);
+  body.position.y = 0.8; body.castShadow = true;
+  const visor = new THREE.Mesh(new THREE.CapsuleGeometry(0.13, 0.32, 4, 12), inkMat);
+  visor.rotation.z = Math.PI / 2; visor.position.set(0, 1.22, -0.33);
+  g.add(body, visor);
+  const eyeMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+  for (const ex of [-0.1, 0.1]) {
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.04, 8, 8), eyeMat);
+    eye.position.set(ex, 1.23, -0.45); g.add(eye);
+  }
+  for (const fx of [-0.17, 0.17]) {
+    const foot = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 8), inkMat);
+    foot.scale.set(1, 0.5, 1.3); foot.position.set(fx, 0.06, -0.04); foot.castShadow = true; g.add(foot);
+  }
+  for (const ax of [-0.5, 0.5]) {
+    const arm = new THREE.Mesh(new THREE.CapsuleGeometry(0.09, 0.3, 4, 8), bodyMat);
+    arm.position.set(ax, 0.85, 0); arm.castShadow = true; g.add(arm);
+  }
+  const wingGeo = new THREE.BoxGeometry(0.9, 0.05, 0.35);
+  wingGeo.translate(0.45, 0, 0);
+  const wingMat = toon(ACCENT);
+  g.userData.wings = [];
+  for (const side of [-1, 1]) {
+    const wing = new THREE.Mesh(wingGeo, wingMat);
+    wing.position.set(0.15 * side, 1.15, 0.3);
+    wing.rotation.y = side < 0 ? Math.PI : 0;
+    wing.scale.setScalar(0.001);
+    g.add(wing); g.userData.wings.push(wing);
+  }
+  scene.add(g);
+  return g;
+}
+
+// ================= Players =================
+const yawToCenter = (x, z) => Math.atan2(x, z);   // facing (−sin, −cos) points at the origin
+function makePlayer(slot, isBot) {
+  const pl = {
+    slot, isBot, human: !isBot,
+    pos: new THREE.Vector3(), prev: new THREE.Vector3(), vel: new THREE.Vector3(),
+    yaw: 0, grounded: false, ground: null, lastGrounded: -10, jumpPressedAt: -10, lastJumpSeq: 0,
+    glideLeft: GLIDE_MAX, gliding: false, stun: 0, lastShot: -10,
+    lives: settings.lives, alive: true, respawnAt: 0,
+    inp: { x: 0, z: 0, jump: false, jumpSeq: 0, fire: false },
+    bot: { think: 0, strafe: Math.random() < 0.5 ? -1 : 1, aimErr: 0 },
+    mesh: makeBotMesh(COLORS[slot]),
+    disp: new THREE.Vector3(), visY: 0, visInit: false,
+  };
+  placeAtSpawn(pl);
+  return pl;
+}
+function placeAtSpawn(pl) {
+  const [x, z] = SPAWNS[pl.slot];
+  pl.pos.set(x, 4, z);        // drop in from above
+  pl.prev.copy(pl.pos);
+  pl.vel.set(0, 0, 0);
+  pl.yaw = yawToCenter(x, z);
+  pl.glideLeft = GLIDE_MAX;
+  pl.stun = 0;
+  pl.alive = true;
+  pl.visInit = false;
+  pl.mesh.visible = true;
+  if (pl === localPlayer()) localYaw = pl.yaw;
+}
+
+// ================= Game state =================
+const settings = { lives: 3, bots: 3 };
+let players = [];
+let shots = [];
+let matchTime = 0;
+let state = 'menu';        // menu | play | over
+let winner = -1, overAt = 0;
+let mySlot = 0;
+let role = 'solo';         // solo | host | client
+let localYaw = Math.PI;
+const localPlayer = () => players.find((p) => p.slot === mySlot);
+
+function clearPlayers() {
+  for (const p of players) scene.remove(p.mesh);
+  players = [];
+  for (const s of shots) scene.remove(s.mesh);
+  shots = [];
+}
+function startMatch(humanSlots) {
+  clearPlayers();
+  const botCount = Math.min(settings.bots, 4 - humanSlots.length);
+  for (const slot of humanSlots) players.push(makePlayer(slot, false));
+  let slot = 0;
+  for (let b = 0; b < botCount; b++) {
+    while (humanSlots.includes(slot)) slot++;
+    players.push(makePlayer(slot++, true));
+  }
+  players.sort((a, b) => a.slot - b.slot);
+  for (const p of players) p.lives = settings.lives;
+  state = 'play'; winner = -1;
+  const me = localPlayer();
+  if (me) localYaw = me.yaw;
+}
+function resetRound() {
+  for (const p of players) { p.lives = settings.lives; placeAtSpawn(p); }
+  for (const s of shots) scene.remove(s.mesh);
+  shots = [];
+  state = 'play'; winner = -1;
+}
+
+// ================= Collision =================
+const E = 1e-4;
+function overlaps(px, py, pz, s) {
+  return px + PLAYER_R > s.min.x + E && px - PLAYER_R < s.max.x - E &&
+         pz + PLAYER_R > s.min.z + E && pz - PLAYER_R < s.max.z - E &&
+         py + PLAYER_H > s.min.y + E && py < s.max.y - E;
+}
+function blockedAt(px, py, pz) {
+  for (const s of solids) if (overlaps(px, py, pz, s)) return true;
+  return false;
+}
+function moveHorizontal(pl, axis, amount) {
+  const p = pl.pos;
+  p[axis] += amount;
+  for (const s of solids) {
+    if (!overlaps(p.x, p.y, p.z, s)) continue;
+    if (s.max.y - p.y <= MANTLE_MAX && !blockedAt(p.x, s.max.y + E, p.z)) {
+      p.y = s.max.y;
+      if (pl.vel.y < 0) pl.vel.y = 0;
+      pl.grounded = true; pl.ground = s;
+      continue;
+    }
+    const c = axis === 'x' ? (s.min.x + s.max.x) / 2 : (s.min.z + s.max.z) / 2;
+    p[axis] = p[axis] < c ? s.min[axis] - PLAYER_R - E : s.max[axis] + PLAYER_R + E;
+    pl.vel[axis] = 0;
+  }
+}
+// Is there something to stand on at (x, z), at or a little below height y?
+function groundAt(x, z, y) {
+  for (const s of solids) {
+    if (x > s.min.x && x < s.max.x && z > s.min.z && z < s.max.z && s.max.y <= y + 0.5 && s.max.y > y - 2.5) return true;
+  }
+  return false;
+}
+
+// ================= Simulation (host / solo only) =================
+const fwd = new THREE.Vector3(), right = new THREE.Vector3();
+function stepPlayer(pl, dt) {
+  const p = pl.pos, v = pl.vel, inp = pl.inp;
+  pl.prev.copy(p);
+  const wasGrounded = pl.grounded, prevGround = pl.ground;
+
+  for (let pass = 0; pass < 2; pass++) {
+    for (const s of solids) {
+      if (overlaps(p.x, p.y, p.z, s) && s.max.y - p.y < PLAYER_H + 0.2) { p.y = s.max.y; if (v.y < 0) v.y = 0; }
+    }
+  }
+  if (wasGrounded && prevGround && prevGround.dy < 0) p.y += prevGround.dy;
+  pl.grounded = false; pl.ground = null;
+
+  fwd.set(-Math.sin(pl.yaw), 0, -Math.cos(pl.yaw));
+  right.set(Math.cos(pl.yaw), 0, -Math.sin(pl.yaw));
+  const tx = (fwd.x * inp.z + right.x * inp.x) * RUN_SPEED;
+  const tz = (fwd.z * inp.z + right.z * inp.x) * RUN_SPEED;
+  pl.stun = Math.max(0, pl.stun - dt);
+  const accel = pl.stun > 0 ? 0.8 : wasGrounded ? 14 : 5;   // knocked players lose control briefly
+  const k = Math.min(1, accel * dt);
+  v.x += (tx - v.x) * k;
+  v.z += (tz - v.z) * k;
+
+  if (inp.jumpSeq !== pl.lastJumpSeq) { pl.lastJumpSeq = inp.jumpSeq; pl.jumpPressedAt = matchTime; }
+  if (wasGrounded) pl.lastGrounded = matchTime;
+  if (matchTime - pl.jumpPressedAt < JUMP_BUFFER && matchTime - pl.lastGrounded < COYOTE) {
+    v.y = JUMP_VEL; pl.jumpPressedAt = -10; pl.lastGrounded = -10;
+  }
+  pl.gliding = inp.jump && !wasGrounded && v.y < 0 && pl.glideLeft > 0;
+  if (pl.gliding) { v.y = Math.max(v.y - GRAVITY * 0.2 * dt, -GLIDE_FALL); pl.glideLeft -= dt; }
+  else v.y -= GRAVITY * dt;
+
+  const prevY = p.y;
+  p.y += v.y * dt;
+  for (const s of solids) {
+    if (!overlaps(p.x, p.y, p.z, s)) continue;
+    if (v.y <= 0 && prevY >= s.max.y - 0.3) { p.y = s.max.y; v.y = 0; pl.grounded = true; pl.ground = s; }
+    else if (v.y > 0 && prevY + PLAYER_H <= s.min.y + 0.05) { p.y = s.min.y - PLAYER_H - E; v.y = 0; }
+  }
+  moveHorizontal(pl, 'x', v.x * dt);
+  moveHorizontal(pl, 'z', v.z * dt);
+  if (pl.grounded) pl.glideLeft = GLIDE_MAX;
+}
+
+function angleDiff(a, b) { let d = a - b; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; return d; }
+
+function thinkBot(pl, dt) {
+  const b = pl.bot, inp = pl.inp, p = pl.pos;
+  let target = null, best = 1e9;
+  for (const o of players) {
+    if (o === pl || !o.alive) continue;
+    const d = Math.hypot(o.pos.x - p.x, o.pos.z - p.z);
+    if (d < best) { best = d; target = o; }
+  }
+  b.think -= dt;
+  if (b.think <= 0) { b.think = 0.4 + Math.random() * 0.4; b.aimErr = (Math.random() - 0.5) * 0.25; if (Math.random() < 0.25) b.strafe *= -1; }
+  let wantYaw = yawToCenter(p.x, p.z);
+  if (target) wantYaw = Math.atan2(-(target.pos.x - p.x), -(target.pos.z - p.z)) + b.aimErr;
+  inp.z = target ? (best > 7 ? 1 : 0.2) : 0.5;
+  inp.x = target && best < 12 ? 0.5 * b.strafe : 0;
+  inp.fire = !!target && best < 20 && Math.abs(angleDiff(wantYaw, pl.yaw)) < 0.3;
+  inp.jump = false;
+
+  // Edge safety: if the path ahead has no floor, back off and turn toward the middle
+  fwd.set(-Math.sin(pl.yaw), 0, -Math.cos(pl.yaw));
+  right.set(Math.cos(pl.yaw), 0, -Math.sin(pl.yaw));
+  const mx = fwd.x * inp.z + right.x * inp.x, mz = fwd.z * inp.z + right.z * inp.x;
+  const ml = Math.hypot(mx, mz) || 1;
+  if (pl.grounded && !groundAt(p.x + (mx / ml) * 1.6, p.z + (mz / ml) * 1.6, p.y)) {
+    wantYaw = yawToCenter(p.x, p.z);
+    inp.z = 0.6; inp.x = 0; inp.fire = false;
+  }
+  // Falling over a hole: glide back toward the middle
+  if (!pl.grounded && p.y < 0.5 && !groundAt(p.x, p.z, p.y)) {
+    wantYaw = yawToCenter(p.x, p.z); inp.z = 1; inp.x = 0; inp.jump = true;
+    if (pl.vel.y > 0 && Math.random() < 0.02) inp.jumpSeq++;
+  }
+  const d = angleDiff(wantYaw, pl.yaw);
+  pl.yaw += Math.max(-3.2 * dt, Math.min(3.2 * dt, d));
+}
+
+const shotGeo = new THREE.SphereGeometry(SHOT_R, 10, 8);
+const shotMats = COLORS.map((c) => toon(c));
+function spawnShotMesh(slot) {
+  const m = new THREE.Mesh(shotGeo, shotMats[slot] || shotMats[0]);
+  m.castShadow = true;
+  scene.add(m);
+  return m;
+}
+function insideSolid(v) {
+  for (const s of solids) if (v.x > s.min.x && v.x < s.max.x && v.y > s.min.y && v.y < s.max.y && v.z > s.min.z && v.z < s.max.z) return true;
+  return false;
+}
+function updateShots(dt) {
+  for (const pl of players) {
+    if (!pl.alive || !pl.inp.fire || matchTime - pl.lastShot < FIRE_COOLDOWN) continue;
+    pl.lastShot = matchTime;
+    const f = new THREE.Vector3(-Math.sin(pl.yaw), 0, -Math.cos(pl.yaw));
+    const pos = pl.pos.clone().add(new THREE.Vector3(0, 1.0, 0)).addScaledVector(f, 0.6);
+    shots.push({ pos, vel: f.multiplyScalar(SHOT_SPEED).add(new THREE.Vector3(0, 2.5, 0)), born: matchTime, owner: pl.slot, mesh: spawnShotMesh(pl.slot) });
+  }
+  for (let i = shots.length - 1; i >= 0; i--) {
+    const s = shots[i];
+    s.vel.y -= 9 * dt;
+    s.pos.addScaledVector(s.vel, dt);
+    let dead = matchTime - s.born > SHOT_LIFE || insideSolid(s.pos);
+    if (!dead) {
+      for (const pl of players) {
+        if (!pl.alive || pl.slot === s.owner) continue;
+        const dx = s.pos.x - pl.pos.x, dz = s.pos.z - pl.pos.z;
+        if (Math.hypot(dx, dz) < PLAYER_R + SHOT_R && s.pos.y > pl.pos.y && s.pos.y < pl.pos.y + PLAYER_H) {
+          const hl = Math.hypot(s.vel.x, s.vel.z) || 1;
+          pl.vel.x += (s.vel.x / hl) * KNOCK;
+          pl.vel.z += (s.vel.z / hl) * KNOCK;
+          pl.vel.y = Math.max(pl.vel.y, 0) + KNOCK_UP;
+          pl.stun = STUN;
+          dead = true;
+          break;
+        }
+      }
+    }
+    if (dead) { scene.remove(s.mesh); shots.splice(i, 1); }
+  }
+}
+
+function step(dt) {
+  matchTime += dt;
+  updateDynamics(matchTime);
+  if (state === 'menu') return;
+  for (const pl of players) {
+    if (!pl.alive) {
+      if (pl.lives > 0 && matchTime >= pl.respawnAt) placeAtSpawn(pl);
+      else continue;
+    }
+    if (pl.isBot) thinkBot(pl, dt);
+    stepPlayer(pl, dt);
+    if (pl.pos.y < FALL_Y) {
+      pl.alive = false;
+      pl.mesh.visible = false;
+      if (state === 'play') pl.lives--;
+      pl.respawnAt = matchTime + RESPAWN_DELAY;
+      if (pl.slot === mySlot) flash(pl.lives > 0 ? `You fell! ${pl.lives} left` : 'Out!');
+    }
+  }
+  updateShots(dt);
+  if (state === 'play' && players.length >= 2) {
+    const left = players.filter((p) => p.lives > 0);
+    if (left.length <= 1) { state = 'over'; winner = left.length ? left[0].slot : -1; overAt = matchTime; }
+  } else if (state === 'over' && matchTime - overAt > ROUND_END_DELAY) {
+    resetRound();
+  }
+}
+
+// ================= Input =================
+const keys = new Set();
+let jumpHeld = false, fireHeld = false, jumpSeq = 0;
+const input = { x: 0, z: 0, turn: 0 };
+const stick = { id: null, ox: 0, oy: 0, x: 0, y: 0 };
+let touchMode = matchMedia('(pointer: coarse)').matches;
+function pressJump() { if (!jumpHeld) jumpSeq++; jumpHeld = true; }
+function releaseJump() { jumpHeld = false; }
+addEventListener('keydown', (e) => {
+  if (e.target && e.target.tagName === 'INPUT') return;
+  const k = e.key.toLowerCase();
+  if (k === ' ') { e.preventDefault(); if (!e.repeat) pressJump(); }
+  if (k === 'f') fireHeld = true;
+  keys.add(k);
+});
+addEventListener('keyup', (e) => {
+  const k = e.key.toLowerCase();
+  if (k === ' ') releaseJump();
+  if (k === 'f') fireHeld = false;
+  keys.delete(k);
+});
+addEventListener('blur', () => { keys.clear(); releaseJump(); fireHeld = false; });
+
+const MOUSE_SENS = 0.0025;
+canvas.addEventListener('click', () => {
+  if (touchMode || state === 'menu' || document.pointerLockElement === canvas) return;
+  try { const p = canvas.requestPointerLock(); if (p && p.catch) p.catch(() => {}); } catch (err) {}
+});
+let mouseDrag = false;
+canvas.addEventListener('pointerdown', (e) => {
+  if (e.pointerType === 'mouse') {
+    if (document.pointerLockElement === canvas && e.button === 0) fireHeld = true; else mouseDrag = true;
+    return;
+  }
+  setTouchMode(true);
+  if (stick.id === null && e.clientX < innerWidth * 0.6) {
+    placeStick();
+    stick.id = e.pointerId; stick.x = e.clientX; stick.y = e.clientY;
+    updateStickVisual();
+    try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
+  }
+});
+canvas.addEventListener('pointermove', (e) => {
+  if (e.pointerType === 'mouse') {
+    if (document.pointerLockElement === canvas || mouseDrag) localYaw -= e.movementX * MOUSE_SENS;
+    return;
+  }
+  if (e.pointerId === stick.id) { stick.x = e.clientX; stick.y = e.clientY; updateStickVisual(); }
+});
+function endPointer(e) {
+  if (e.pointerType === 'mouse') { mouseDrag = false; fireHeld = false; return; }
+  if (e.pointerId === stick.id) { stick.id = null; stick.x = stick.ox; stick.y = stick.oy; updateStickVisual(); }
+}
+canvas.addEventListener('pointerup', endPointer);
+canvas.addEventListener('pointercancel', endPointer);
+document.addEventListener('touchmove', (e) => { if (!(e.target && e.target.tagName === 'INPUT')) e.preventDefault(); }, { passive: false });
+
+function holdButton(el, down, up) {
+  el.addEventListener('pointerdown', (e) => {
+    e.preventDefault(); e.stopPropagation(); down(); el.classList.add('down');
+    try { el.setPointerCapture(e.pointerId); } catch (err) {}
+  });
+  const end = () => { up(); el.classList.remove('down'); };
+  el.addEventListener('pointerup', end);
+  el.addEventListener('pointercancel', end);
+}
+const $ = (id) => document.getElementById(id);
+const jumpBtn = $('jumpBtn'), fireBtn = $('fireBtn');
+holdButton(jumpBtn, pressJump, releaseJump);
+holdButton(fireBtn, () => { fireHeld = true; }, () => { fireHeld = false; });
+
+const stickBase = $('stickBase'), stickKnob = $('stickKnob');
+const STICK_R = 60;
+function placeStick() {
+  stick.ox = 100; stick.oy = innerHeight - 110;
+  if (stick.id === null) { stick.x = stick.ox; stick.y = stick.oy; }
+  stickBase.style.left = stick.ox + 'px'; stickBase.style.top = stick.oy + 'px';
+  updateStickVisual();
+}
+function updateStickVisual() {
+  let dx = stick.x - stick.ox, dy = stick.y - stick.oy;
+  const len = Math.hypot(dx, dy);
+  if (len > STICK_R) { dx *= STICK_R / len; dy *= STICK_R / len; }
+  stickKnob.style.left = (stick.ox + dx) + 'px';
+  stickKnob.style.top = (stick.oy + dy) + 'px';
+}
+addEventListener('resize', placeStick);
+
+const hud = $('hud'), helpBtn = $('helpBtn');
+let helpOn = true;
+function setTouchMode(on) {
+  touchMode = on;
+  hud.innerHTML = on
+    ? '<b>Joystick</b> (lower left): up/down = forward/back, left/right = turn<br><b>FIRE</b> pushes players &nbsp; <b>JUMP</b> hold to glide'
+    : '<b>Click</b> to lock mouse (Esc frees it) &nbsp; <b>Mouse</b> turn &nbsp; <b>WASD</b> move<br><b>Click / F</b> fire (pushes) &nbsp; <b>Space</b> jump, hold to glide';
+  refreshHud();
+}
+function refreshHud() {
+  const playing = state !== 'menu';
+  const t = playing && touchMode;
+  jumpBtn.style.display = fireBtn.style.display = t ? 'flex' : 'none';
+  stickBase.style.display = stickKnob.style.display = t ? 'block' : 'none';
+  if (t) placeStick();
+  hud.style.display = playing && helpOn ? 'block' : 'none';
+  helpBtn.style.display = playing && !helpOn ? 'flex' : 'none';
+  $('leaveBtn').style.display = playing ? 'flex' : 'none';
+  $('score').style.display = playing ? 'flex' : 'none';
+  $('glideWrap').style.display = playing ? 'block' : 'none';
+}
+hud.addEventListener('pointerdown', (e) => { e.stopPropagation(); helpOn = false; refreshHud(); });
+helpBtn.addEventListener('pointerdown', (e) => { e.stopPropagation(); helpOn = true; refreshHud(); });
+$('leaveBtn').addEventListener('click', () => location.reload());
+
+const DEAD = 0.15;
+const deadzone = (v) => (Math.abs(v) < DEAD ? 0 : Math.sign(v) * (Math.abs(v) - DEAD) / (1 - DEAD));
+function readInput() {
+  let x = 0, z = 0, turn = 0;
+  if (keys.has('w') || keys.has('arrowup')) z += 1;
+  if (keys.has('s') || keys.has('arrowdown')) z -= 1;
+  if (keys.has('d')) x += 1;
+  if (keys.has('a')) x -= 1;
+  if (keys.has('arrowright')) turn += 1;
+  if (keys.has('arrowleft')) turn -= 1;
+  if (stick.id !== null) {
+    z -= deadzone(THREE.MathUtils.clamp((stick.y - stick.oy) / STICK_R, -1, 1));
+    turn += deadzone(THREE.MathUtils.clamp((stick.x - stick.ox) / STICK_R, -1, 1));
+  }
+  const len = Math.hypot(x, z);
+  if (len > 1) { x /= len; z /= len; }
+  input.x = x; input.z = z; input.turn = THREE.MathUtils.clamp(turn, -1, 1);
+}
+function applyLocalInput() {
+  const me = localPlayer();
+  if (!me) return;
+  Object.assign(me.inp, { x: input.x, z: input.z, jump: jumpHeld, jumpSeq, fire: fireHeld });
+  me.yaw = localYaw;
+}
+
+// ================= UI: menu, score, banner =================
+const status = (html) => { $('status').innerHTML = html; };
+document.querySelectorAll('.stepper button').forEach((b) => {
+  b.addEventListener('click', () => {
+    const k = b.dataset.k, d = +b.dataset.d;
+    if (k === 'lives') settings.lives = Math.max(1, Math.min(9, settings.lives + d));
+    if (k === 'bots') settings.bots = Math.max(0, Math.min(3, settings.bots + d));
+    $('livesVal').textContent = settings.lives;
+    $('botsVal').textContent = settings.bots;
+  });
+});
+function hideMenu() { $('menu').style.display = 'none'; refreshHud(); }
+
+$('soloBtn').addEventListener('click', () => {
+  role = 'solo'; mySlot = 0;
+  startMatch([0]);
+  hideMenu();
+});
+
+let bannerTimer = 0;
+function flash(text) { const b = $('banner'); b.textContent = text; b.style.display = 'block'; bannerTimer = 2; }
+function updateScoreUi(dt) {
+  const el = $('score');
+  let html = '';
+  for (const p of players) {
+    const you = p.slot === mySlot ? ' (you)' : p.isBot ? ' (bot)' : '';
+    const hearts = p.lives > 0 ? '●'.repeat(p.lives) : 'out';
+    html += `<div style="color:${COLOR_CSS[p.slot]}">${COLOR_NAMES[p.slot]}${you} ${hearts}</div>`;
+  }
+  if (el.innerHTML !== html) el.innerHTML = html;
+  const b = $('banner');
+  if (state === 'over') {
+    b.style.display = 'block';
+    const text = winner < 0 ? 'Draw!' : winner === mySlot ? 'You win!' : `${COLOR_NAMES[winner]} wins!`;
+    if (b.textContent !== text) b.textContent = text;
+    bannerTimer = 0.3;
+  } else if (bannerTimer > 0) {
+    bannerTimer -= dt;
+    if (bannerTimer <= 0) b.style.display = 'none';
+  }
+}
+
+// ================= Online (PeerJS, host-authoritative) =================
+let peer = null, conns = [], hostConn = null;
+let lastSnapSent = 0, lastInputSent = 0;
+let snap = null, snapAt = 0;
+
+function peerAvailable() {
+  if (!window.Peer || !window.RTCPeerConnection) {
+    status('Online play needs the game hosted on its own page (for example GitHub Pages). This preview blocks peer-to-peer connections.');
+    return false;
+  }
+  return true;
+}
+function makeCode() {
+  const L = 'ABCDEFGHJKMNPQRSTUVWXYZ';
+  let c = '';
+  for (let i = 0; i < 4; i++) c += L[Math.floor(Math.random() * L.length)];
+  return c;
+}
+function hostLobbyText(code) {
+  status(`Room code: <b>${code}</b><br>Players connected: ${1 + conns.length} of 4. Bots fill the empty spots.`);
+}
+
+$('hostBtn').addEventListener('click', () => {
+  if (!peerAvailable() || peer) return;
+  role = 'host'; mySlot = 0;
+  const code = makeCode();
+  status('Creating room…');
+  peer = new Peer(ROOM_PREFIX + code);
+  peer.on('open', () => { hostLobbyText(code); $('startBtn').style.display = 'block'; });
+  peer.on('error', (e) => status('Online error: ' + e.type + '. Try again.'));
+  peer.on('connection', (conn) => {
+    conn.on('open', () => {
+      const used = new Set([0, ...conns.map((c) => c.slot)]);
+      let slot = -1;
+      for (let s = 1; s < 4; s++) if (!used.has(s)) { slot = s; break; }
+      if (slot < 0) { conn.send({ t: 'full' }); setTimeout(() => conn.close(), 300); return; }
+      conn.slot = slot;
+      conns.push(conn);
+      conn.send({ t: 'welcome', slot });
+      if (state === 'menu') hostLobbyText(code);
+      else {
+        // Joined mid-match: take over a bot in that slot, or add a new player
+        const existing = players.find((p) => p.slot === slot);
+        if (existing) { existing.isBot = false; existing.human = true; }
+        else { const np = makePlayer(slot, false); np.lives = settings.lives; players.push(np); players.sort((a, b) => a.slot - b.slot); }
+      }
+    });
+    conn.on('data', (d) => {
+      if (!d || d.t !== 'i') return;
+      const pl = players.find((p) => p.slot === conn.slot);
+      if (!pl) return;
+      pl.inp.x = +d.x || 0; pl.inp.z = +d.z || 0; pl.inp.jump = !!d.jh; pl.inp.fire = !!d.f;
+      pl.inp.jumpSeq = d.j | 0; pl.yaw = +d.y || 0;
+    });
+    conn.on('close', () => {
+      conns = conns.filter((c) => c !== conn);
+      const pl = players.find((p) => p.slot === conn.slot);
+      if (pl) { pl.isBot = true; pl.human = false; }   // a bot takes over for the rest of the match
+      if (state === 'menu') hostLobbyText(code);
+    });
+  });
+});
+$('startBtn').addEventListener('click', () => {
+  if (role !== 'host') return;
+  startMatch([0, ...conns.map((c) => c.slot)]);
+  hideMenu();
+});
+
+$('joinBtn').addEventListener('click', () => {
+  if (!peerAvailable() || peer) return;
+  const code = $('codeIn').value.trim().toUpperCase();
+  if (code.length !== 4) { status('Enter the 4-letter room code.'); return; }
+  role = 'client';
+  status('Connecting…');
+  peer = new Peer();
+  peer.on('error', (e) => {
+    status(e.type === 'peer-unavailable' ? 'Room not found. Check the code.' : 'Online error: ' + e.type);
+    if (peer) { peer.destroy(); peer = null; }
+    role = 'solo';
+  });
+  peer.on('open', () => {
+    hostConn = peer.connect(ROOM_PREFIX + code, { serialization: 'json' });
+    hostConn.on('open', () => status('Connected. Waiting for the host to start…'));
+    hostConn.on('data', onClientData);
+    hostConn.on('close', () => { flash('Disconnected from host'); });
+  });
+});
+
+function packSnapshot() {
+  const r2 = (v) => Math.round(v * 100) / 100;
+  return {
+    t: 's', mt: r2(matchTime), st: state, w: winner,
+    ps: players.map((p) => [p.slot, r2(p.pos.x), r2(p.pos.y), r2(p.pos.z), r2(p.yaw), p.lives, p.alive ? 1 : 0, p.gliding ? 1 : 0, p.isBot ? 1 : 0]),
+    sh: shots.map((s) => [s.owner, r2(s.pos.x), r2(s.pos.y), r2(s.pos.z)]),
+  };
+}
+function onClientData(d) {
+  if (!d) return;
+  if (d.t === 'welcome') { mySlot = d.slot; }
+  else if (d.t === 'full') { status('That room is full.'); }
+  else if (d.t === 's') {
+    snap = d; snapAt = performance.now();
+    if (state === 'menu') { hideMenuForClient(); }
+    state = d.st; winner = d.w;
+    applySnapshotStructure(d);
+  }
+}
+function hideMenuForClient() {
+  $('menu').style.display = 'none';
+  state = 'play';
+  refreshHud();
+}
+// Clients keep one visual player per slot, updated from snapshots
+function applySnapshotStructure(d) {
+  const seen = new Set();
+  for (const row of d.ps) {
+    const [slot, x, y, z, yaw, lives, alive, glide, isBot] = row;
+    seen.add(slot);
+    let pl = players.find((p) => p.slot === slot);
+    if (!pl) {
+      pl = makePlayer(slot, !!isBot);
+      pl.pos.set(x, y, z); pl.disp.set(x, y, z);
+      players.push(pl); players.sort((a, b) => a.slot - b.slot);
+      if (slot === mySlot) localYaw = yaw;
+    }
+    const wasAlive = pl.alive;
+    pl.pos.set(x, y, z);
+    if (slot !== mySlot) pl.yaw = yaw;
+    if (slot === mySlot && wasAlive && !alive) flash(lives > 0 ? `You fell! ${lives} left` : 'Out!');
+    if (!wasAlive && alive) { pl.disp.set(x, y, z); pl.visInit = false; if (slot === mySlot) localYaw = yaw; }
+    pl.lives = lives; pl.alive = !!alive; pl.gliding = !!glide; pl.isBot = !!isBot;
+    pl.mesh.visible = pl.alive;
+  }
+  for (const p of [...players]) if (!seen.has(p.slot)) { scene.remove(p.mesh); players = players.filter((q) => q !== p); }
+  // shots
+  while (shots.length > d.sh.length) scene.remove(shots.pop().mesh);
+  d.sh.forEach((row, i) => {
+    if (!shots[i]) shots[i] = { mesh: spawnShotMesh(row[0]), pos: new THREE.Vector3() };
+    shots[i].mesh.material = shotMats[row[0]] || shotMats[0];
+    shots[i].mesh.position.set(row[1], row[2], row[3]);
+  });
+}
+
+function netTick(now) {
+  if (role === 'host' && conns.length && state !== 'menu' && now - lastSnapSent > SNAP_RATE * 1000) {
+    lastSnapSent = now;
+    const s = packSnapshot();
+    for (const c of conns) if (c.open) c.send(s);
+  }
+  if (role === 'client' && hostConn && hostConn.open && now - lastInputSent > INPUT_RATE * 1000) {
+    lastInputSent = now;
+    const r3 = (v) => Math.round(v * 1000) / 1000;
+    hostConn.send({ t: 'i', x: r3(input.x), z: r3(input.z), y: r3(localYaw), j: jumpSeq, jh: jumpHeld ? 1 : 0, f: fireHeld ? 1 : 0 });
+  }
+}
+
+// ================= Camera & render =================
+const camPos = new THREE.Vector3(), camTarget = new THREE.Vector3();
+let camInit = false, camY = 0;
+function updateFov() {
+  const aspect = innerWidth / innerHeight;
+  const vfov = 2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(45)) / aspect);
+  camera.fov = THREE.MathUtils.clamp(THREE.MathUtils.radToDeg(vfov), 55, 95);
+  camera.aspect = aspect;
+  camera.updateProjectionMatrix();
+}
+updateFov();
+addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); updateFov(); });
+
+const tmp = new THREE.Vector3();
+function render(dt, alpha) {
+  const tRender = role === 'client' && snap ? snap.mt + (performance.now() - snapAt) / 1000 : matchTime - STEP * (1 - alpha);
+
+  for (const pl of players) {
+    if (role === 'client') {
+      // smooth toward the latest snapshot
+      if (!pl.visInit) pl.disp.copy(pl.pos);
+      pl.disp.lerp(pl.pos, Math.min(1, dt * 14));
+      tmp.copy(pl.disp);
+    } else {
+      tmp.copy(pl.prev).lerp(pl.pos, alpha);
+    }
+    pl.visY = pl.visInit ? pl.visY + (tmp.y - pl.visY) * Math.min(1, dt * 16) : tmp.y;
+    pl.visInit = true;
+    pl.mesh.position.set(tmp.x, pl.visY, tmp.z);
+    pl.mesh.rotation.y = pl.slot === mySlot ? localYaw : pl.yaw;
+    for (const w of pl.mesh.userData.wings) {
+      const target = pl.gliding ? 1 : 0.001;
+      w.scale.setScalar(Math.max(w.scale.x + (target - w.scale.x) * Math.min(1, dt * 14), 0.001));
+    }
+  }
+  if (role !== 'client') for (const s of shots) s.mesh.position.copy(s.pos);
+
+  // Camera follows you, or the first player still in when you're out
+  let follow = localPlayer();
+  if (follow && !follow.alive && follow.lives <= 0) follow = players.find((p) => p.alive) || follow;
+  const fy = follow ? follow.mesh.position : tmp.set(0, 0, 0);
+  const yaw = follow && follow.slot === mySlot ? localYaw : follow ? follow.yaw : 0;
+  const dist = 5.2, shoulder = 0.75;
+  fwd.set(-Math.sin(yaw), 0, -Math.cos(yaw));
+  right.set(Math.cos(yaw), 0, -Math.sin(yaw));
+  const targetY = Math.max(fy.y, -2);
+  camY = camInit ? camY + (targetY - camY) * Math.min(1, dt * 6) : targetY;
+  camTarget.set(fy.x, camY + 1.45, fy.z).addScaledVector(right, shoulder);
+  camPos.copy(camTarget).addScaledVector(fwd, -Math.cos(PITCH) * dist);
+  camPos.y += Math.sin(PITCH) * dist;
+  if (!camInit) { camera.position.copy(camPos); camInit = true; }
+  camera.position.lerp(camPos, Math.min(1, dt * 18));
+  camera.lookAt(camTarget);
+
+  drawDynamics(tRender);
+  const me = localPlayer();
+  $('glideBar').style.width = (me && role !== 'client' ? 100 * Math.max(me.glideLeft, 0) / GLIDE_MAX : 100) + '%';
+  renderer.render(scene, camera);
+}
+
+// ================= Main loop =================
+setTouchMode(touchMode);
+let last = performance.now(), acc = 0;
+function frame(now) {
+  const dt = Math.min(0.1, (now - last) / 1000);
+  last = now;
+  readInput();
+  localYaw -= input.turn * TURN_RATE * dt;
+  if (role !== 'client') {
+    applyLocalInput();
+    acc += dt;
+    while (acc >= STEP) { step(STEP); acc -= STEP; }
+  }
+  netTick(now);
+  if (state !== 'menu') updateScoreUi(dt);
+  render(dt, role === 'client' ? 1 : acc / STEP);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
